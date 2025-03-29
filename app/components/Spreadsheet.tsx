@@ -4,9 +4,16 @@ import { HotTable } from "@handsontable/react";
 import "handsontable/dist/handsontable.full.min.css";
 import { Save, Download, Upload, RefreshCw } from "lucide-react";
 
-const Spreadsheet: React.FC = () => {
+interface SpreadsheetProps {
+  sheetId: string | null;
+  isNew: boolean;
+  onSaveComplete?: () => void;
+}
+
+const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplete }) => {
   const hotRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [sheetName, setSheetName] = useState<string>("");
   const [data, setData] = useState<any[]>([
     ["ID", "Name", "Department", "Salary", "Start Date", "Performance Rating"],
     [1, "John Doe", "HR", 50000, "2022-01-15", "A"],
@@ -16,21 +23,28 @@ const Spreadsheet: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    fetchData(); // Load initial data
-  }, []);
+    if (!isNew && sheetId) {
+      fetchSheetData(sheetId);
+    }
+  }, [sheetId, isNew]);
 
-  // Fetch Data from API
-  const fetchData = async () => {
+  // Fetch specific sheet data
+  const fetchSheetData = async (id: string) => {
     setIsLoading(true);
     try {
-      const res = await fetch("/api/spreadsheets");
+      const res = await fetch(`/api/spreadsheets/${id}`);
+      if (!res.ok) {
+        throw new Error(`HTTP error! Status: ${res.status}`);
+      }
+      
       const result = await res.json();
-      if (result.length > 0) {
-        setData(result[0].data);
+      if (result) {
+        setData(result.data || []);
+        setSheetName(result.name || `Spreadsheet ${id}`);
       }
     } catch (error) {
       console.error("Failed to fetch data:", error);
-      alert("Failed to load data. Using default data.");
+      alert("Failed to load spreadsheet data.");
     } finally {
       setIsLoading(false);
     }
@@ -38,23 +52,38 @@ const Spreadsheet: React.FC = () => {
 
   // Save Data to API
   const saveData = async () => {
+    if (!sheetName.trim()) {
+      alert("Please enter a name for your spreadsheet");
+      return;
+    }
+
     setIsLoading(true);
     try {
       const tableData = hotRef.current.hotInstance.getData();
-      const response = await fetch("/api/spreadsheets/save", {
+      
+      const endpoint = isNew 
+        ? "/api/spreadsheets/save" 
+        : `/api/spreadsheets/save/${sheetId}`;
+      
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data: tableData }),
+        body: JSON.stringify({ 
+          name: sheetName,
+          data: tableData 
+        }),
       });
 
       if (response.ok) {
-        alert("Data saved successfully!");
+        alert(`Spreadsheet ${isNew ? 'created' : 'updated'} successfully!`);
+        if (onSaveComplete) onSaveComplete();
       } else {
-        throw new Error("Save failed");
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Save failed");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Save error:", error);
-      alert("Failed to save data.");
+      alert(`Failed to save spreadsheet: ${error.message || "Unknown error"}`);
     } finally {
       setIsLoading(false);
     }
@@ -62,13 +91,15 @@ const Spreadsheet: React.FC = () => {
 
   // Export to CSV
   const exportToCSV = () => {
+    if (!hotRef.current) return;
+    
     const tableData = hotRef.current.hotInstance.getData();
     const csvContent = tableData.map((row: any) => row.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", "spreadsheet_export.csv");
+    link.setAttribute("download", `${sheetName || "spreadsheet"}_export.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -117,24 +148,33 @@ const Spreadsheet: React.FC = () => {
         alert("Failed to parse CSV file.");
       }
     };
-    reader.readAsText(file, "UTF-8"); // Correct encoding
+    reader.readAsText(file, "UTF-8");
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen">
+    <div className="flex flex-col h-screen w-full">
       {/* Header Section */}
       <div className="bg-gray-100 p-4 flex justify-between items-center shadow-md">
-        <h1 className="text-2xl font-bold">Company Spreadsheet</h1>
+        <div className="flex items-center">
+          <input
+            type="text"
+            value={sheetName}
+            onChange={(e) => setSheetName(e.target.value)}
+            placeholder="Enter spreadsheet name"
+            className="text-xl font-bold border-2 border-gray-300 rounded px-2 py-1 mr-2 focus:border-blue-500 focus:outline-none"
+          />
+        </div>
         <div className="flex space-x-2">
-          {/* Refresh Button */}
-          <button
-            onClick={fetchData}
-            disabled={isLoading}
-            className="flex items-center bg-green-500 text-white px-3 py-2 rounded hover:bg-green-600 disabled:opacity-50"
-          >
-            <RefreshCw className="mr-2" size={16} />
-            Refresh
-          </button>
+          {!isNew && sheetId && (
+            <button
+              onClick={() => fetchSheetData(sheetId)}
+              disabled={isLoading}
+              className="flex items-center bg-green-500 text-white px-3 py-2 rounded hover:bg-green-600 disabled:opacity-50"
+            >
+              <RefreshCw className="mr-2" size={16} />
+              Refresh
+            </button>
+          )}
           {/* Save Button */}
           <button
             onClick={saveData}
