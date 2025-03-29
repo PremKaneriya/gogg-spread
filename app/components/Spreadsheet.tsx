@@ -14,13 +14,31 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
   const hotRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [sheetName, setSheetName] = useState<string>("");
-  const [data, setData] = useState<any[]>([
-    ["ID", "Name", "Department", "Salary", "Start Date", "Performance Rating"],
-    [1, "John Doe", "HR", 50000, "2022-01-15", "A"],
-    [2, "Jane Smith", "Engineering", 70000, "2021-06-20", "A+"],
-    [3, "Mike Johnson", "Sales", 60000, "2023-03-10", "B"],
-  ]);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Generate 100 empty rows for initial data
+  const generateEmptyRows = (numRows: number = 100) => {
+    // Create header row
+    const headers = ["ID", "Name", "Department", "Salary", "Start Date", "Performance Rating"];
+    
+    // Create sample data for first 3 rows
+    const sampleData = [
+      [1, "John Doe", "HR", 50000, "2022-01-15", "A"],
+      [2, "Jane Smith", "Engineering", 70000, "2021-06-20", "A+"],
+      [3, "Mike Johnson", "Sales", 60000, "2023-03-10", "B"],
+    ];
+    
+    // Create remaining empty rows (with ID numbers)
+    const emptyRows = Array.from({ length: numRows - 3 }, (_, i) => {
+      const rowData = [i + 4, "", "", "", "", ""];
+      return rowData;
+    });
+    
+    // Combine header, sample data and empty rows
+    return [headers, ...sampleData, ...emptyRows];
+  };
+
+  const [data, setData] = useState<any[]>(generateEmptyRows());
 
   useEffect(() => {
     if (!isNew && sheetId) {
@@ -39,7 +57,25 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
       
       const result = await res.json();
       if (result) {
-        setData(result.data || []);
+        // If data has fewer than 100 rows, add empty rows
+        let fetchedData = result.data || [];
+        if (fetchedData.length < 100) {
+          const headers = fetchedData[0] || [];
+          const existingDataRows = fetchedData.slice(1) || [];
+          const additionalEmptyRows = Array.from(
+            { length: 100 - existingDataRows.length }, 
+            (_, i) => {
+              // Create empty row with ID if the first column is for IDs
+              const rowData = Array(headers.length).fill("");
+              if (headers[0] === "ID") {
+                rowData[0] = existingDataRows.length + i + 1;
+              }
+              return rowData;
+            }
+          );
+          fetchedData = [headers, ...existingDataRows, ...additionalEmptyRows];
+        }
+        setData(fetchedData);
         setSheetName(result.name || `Spreadsheet ${id}`);
       }
     } catch (error) {
@@ -59,6 +95,7 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
 
     setIsLoading(true);
     try {
+      // Get all data including empty rows
       const tableData = hotRef.current.hotInstance.getData();
       
       const endpoint = isNew 
@@ -93,8 +130,11 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
   const exportToCSV = () => {
     if (!hotRef.current) return;
     
-    const tableData = hotRef.current.hotInstance.getData();
-    const csvContent = tableData.map((row: any) => row.join(",")).join("\n");
+    // Get non-empty rows only for export
+    const allData = hotRef.current.hotInstance.getData();
+    const nonEmptyRows = allData.filter((row: any[]) => row.some(cell => cell !== "" && cell !== null));
+    
+    const csvContent = nonEmptyRows.map((row: any) => row.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
@@ -107,15 +147,27 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
 
   // Parse CSV safely
   const parseCSV = (text: string) => {
-    return text
+    const parsedRows = text
       .split("\n")
       .map((row) =>
         row
           .split(",")
           .map((cell) => cell.replace(/^"|"$/g, "").trim())
-          .filter(Boolean)
       )
       .filter((row) => row.length > 0);
+    
+    // Get header row
+    const headers = parsedRows[0] || [];
+    
+    // Get data rows
+    const dataRows = parsedRows.slice(1) || [];
+    
+    // Add empty rows to fill up to 100 rows
+    const emptyRows = Array.from({ length: Math.max(0, 100 - dataRows.length) }, () => {
+      return Array(headers.length).fill("");
+    });
+    
+    return [headers, ...dataRows, ...emptyRows];
   };
 
   // Import CSV with file validation
@@ -127,7 +179,7 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
     }
 
     // Check if it's CSV
-    if (file.type !== "text/csv") {
+    if (file.type !== "text/csv" && !file.name.endsWith('.csv')) {
       alert("Invalid file type. Please upload a CSV file.");
       return;
     }
@@ -154,7 +206,7 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
   return (
     <div className="flex flex-col h-screen w-full">
       {/* Header Section */}
-      <div className="bg-gray-100 p-4 flex justify-between items-center shadow-md">
+      <div className="bg-gray-100 p-4 flex justify-between items-center shadow-md text-gray-800">
         <div className="flex items-center">
           <input
             type="text"
@@ -227,6 +279,13 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
           columnSorting={true}
           multiColumnSorting={true}
           manualColumnResize={true}
+          minRows={100}
+          minSpareRows={1}  // Always keeps one empty row at the bottom
+          allowInsertRow={true}
+          allowInsertColumn={true}
+          allowRemoveRow={true}
+          allowRemoveColumn={true}
+          comments={true}
           licenseKey="non-commercial-and-evaluation"
         />
       </div>
