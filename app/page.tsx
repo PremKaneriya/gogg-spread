@@ -14,7 +14,12 @@ export default function Home() {
   const fetchSpreadsheets = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/spreadsheets");
+      const res = await fetch("/api/spreadsheets", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
       const data = await res.json();
       setSpreadsheets(data);
     } catch (error) {
