@@ -15,13 +15,7 @@ export async function GET() {
       FROM spreadsheets 
     `);
     
-    return NextResponse.json(result.rows, {
-      headers: {
-        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-        Pragma: "no-cache",
-        Expires: "0",
-      },
-    });
+    return NextResponse.json(result.rows);
       } catch (error) {
     console.error(error);
     return NextResponse.json({ error: "Error fetching data" }, { status: 500 });
