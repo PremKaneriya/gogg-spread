@@ -1,14 +1,15 @@
-import { Pool } from "pg";
-import dotenv from "dotenv";
-
-dotenv.config();
+import { Pool } from 'pg';
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl:
-    process.env.NODE_ENV === "production"
-      ? { rejectUnauthorized: false }
-      : false,
+  host: process.env.PGHOST || 'ep-twilight-morning-a5nr6ocf-pooler.us-east-2.aws.neon.tech',
+  database: process.env.PGDATABASE || 'Lite',
+  user: process.env.PGUSER || 'Lite_owner',
+  password: process.env.PGPASSWORD || 'npg_LnwNl5FuEa1r',
+  port: 5432,
+  ssl: {
+    rejectUnauthorized: false
+  }
 });
 
 export default pool;
+
