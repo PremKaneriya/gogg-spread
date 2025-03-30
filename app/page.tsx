@@ -1,18 +1,23 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import Spreadsheet from "./components/Spreadsheet";
-import { Plus, FileSpreadsheet, Search } from "lucide-react";
+import { Plus, FileSpreadsheet, Search, LogIn } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 export default function Home() {
+  const router = useRouter();
   const [spreadsheets, setSpreadsheets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSheet, setSelectedSheet] = useState<string | null>(null);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isAuthenticated, setIsAuthenticated] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Fetch all available spreadsheets
+  // Check authentication status and fetch all available spreadsheets
   const fetchSpreadsheets = async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch("/api/spreadsheets", {
         method: "GET",
@@ -21,10 +26,21 @@ export default function Home() {
         },
         cache: "no-store",
       });
+      
+      if (res.status === 401) {
+        setIsAuthenticated(false);
+        throw new Error("You need to log in to view your spreadsheets.");
+      }
+      
+      if (!res.ok) {
+        throw new Error(`Failed to fetch spreadsheets: ${res.status}`);
+      }
+      
       const data = await res.json();
       setSpreadsheets(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch spreadsheets:", error);
+      setError(error.message || "Failed to load spreadsheets");
     } finally {
       setLoading(false);
     }
@@ -35,11 +51,23 @@ export default function Home() {
   }, []);
 
   const handleCreateNew = () => {
+    // Check if user is authenticated before allowing to create new
+    if (!isAuthenticated) {
+      router.push("/login");
+      return;
+    }
+    
     setSelectedSheet(null);
     setIsCreatingNew(true);
   };
 
   const handleSelectSheet = (id: string) => {
+    // Check if user is authenticated before allowing to select a sheet
+    if (!isAuthenticated) {
+      router.push("/login");
+      return;
+    }
+    
     setSelectedSheet(id);
     setIsCreatingNew(false);
   };
@@ -50,10 +78,33 @@ export default function Home() {
     fetchSpreadsheets(); // Refresh the list when going back
   };
 
+  const handleLogin = () => {
+    router.push("/login");
+  };
+
   // Filter spreadsheets based on search term
   const filteredSpreadsheets = spreadsheets.filter(sheet =>
     (sheet.name || `Spreadsheet ${sheet.id}`).toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // If not authenticated, show login prompt
+  if (!isAuthenticated && !selectedSheet && !isCreatingNew) {
+    return (
+      <main className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
+          <h1 className="text-2xl font-bold text-gray-800 mb-4">Welcome to Spreadsheets</h1>
+          <p className="text-gray-600 mb-6">Please log in to view and manage your spreadsheets.</p>
+          <button
+            onClick={handleLogin}
+            className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-3 rounded-lg flex items-center justify-center transition-colors shadow-md mx-auto"
+          >
+            <LogIn size={18} className="mr-2" />
+            Login to Your Account
+          </button>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -84,6 +135,13 @@ export default function Home() {
                 </button>
               </div>
             </div>
+
+            {/* Display any errors */}
+            {error && (
+              <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4">
+                <p>{error}</p>
+              </div>
+            )}
 
             {loading ? (
               <div className="flex justify-center items-center h-64">

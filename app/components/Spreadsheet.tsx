@@ -27,6 +27,7 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
   const [toastType, setToastType] = useState<"success" | "error">("success");
   const [showSettings, setShowSettings] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(true); // Assume authenticated until proven otherwise
 
   useEffect(() => {
     if (!isNew && sheetId) {
@@ -48,6 +49,12 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
     setError(null);
     try {
       const res = await fetch(`/api/spreadsheets/${id}`);
+      
+      if (res.status === 401) {
+        setIsAuthenticated(false);
+        throw new Error("You are not authorized to access this spreadsheet. Please log in.");
+      }
+      
       if (!res.ok) {
         throw new Error(`HTTP error! Status: ${res.status}`);
       }
@@ -62,6 +69,13 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
       console.error("Failed to fetch data:", error);
       setError(error.message || "Failed to load spreadsheet data");
       showToastMessage("Failed to load spreadsheet data", "error");
+      
+      // If unauthorized, redirect to login after a short delay
+      if (!isAuthenticated) {
+        setTimeout(() => {
+          window.location.href = "/login";
+        }, 2000);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -91,10 +105,20 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
           data: tableData 
         }),
       });
+      
+      if (response.status === 401) {
+        setIsAuthenticated(false);
+        throw new Error("You are not authorized to save this spreadsheet. Please log in.");
+      }
 
       if (response.ok) {
+        const result = await response.json();
         showToastMessage(`Spreadsheet ${isNew ? 'created' : 'updated'} successfully!`);
         if (onSaveComplete) onSaveComplete();
+        // If we created a new spreadsheet, we should return its ID for future reference
+        if (isNew && result.id) {
+          // You could handle the new ID here if needed
+        }
       } else {
         const errorData = await response.json();
         throw new Error(errorData.error || "Save failed");
@@ -103,6 +127,13 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
       console.error("Save error:", error);
       setError(error.message || "Failed to save spreadsheet");
       showToastMessage(`Failed to save spreadsheet: ${error.message || "Unknown error"}`, "error");
+      
+      // If unauthorized, redirect to login after a short delay
+      if (!isAuthenticated) {
+        setTimeout(() => {
+          window.location.href = "/login";
+        }, 2000);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -178,6 +209,26 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
     };
     reader.readAsText(file, "UTF-8");
   };
+
+  // Handle authentication errors
+  if (!isAuthenticated) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full bg-gray-50 p-6">
+        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 w-full max-w-md">
+          <div className="flex items-center">
+            <AlertTriangle className="h-5 w-5 mr-2" />
+            <span>You need to be logged in to access this spreadsheet.</span>
+          </div>
+        </div>
+        <button
+          onClick={() => window.location.href = "/login"}
+          className="bg-teal-600 text-white px-4 py-2 rounded-lg shadow-md hover:bg-teal-700"
+        >
+          Go to Login
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full w-full bg-gray-50">
