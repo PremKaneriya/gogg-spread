@@ -2,9 +2,11 @@
 import { NextResponse } from "next/server";
 import pool from "@/lib/db";
 
+export const dynamic = "force-dynamic"; // <- Disable caching for the route
+
 export async function GET() {
   try {
-    // Modify the query to fetch all spreadsheets instead of just the latest one
+    // Query to fetch all spreadsheets
     const result = await pool.query(`
       SELECT id, data, 
       CASE 
@@ -14,7 +16,7 @@ export async function GET() {
       created_at AS "createdAt"
       FROM spreadsheets 
     `);
-    
+
     return NextResponse.json(result.rows, {
       headers: {
         "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
@@ -22,7 +24,7 @@ export async function GET() {
         Expires: "0",
       },
     });
-      } catch (error) {
+  } catch (error) {
     console.error(error);
     return NextResponse.json({ error: "Error fetching data" }, { status: 500 });
   }
