@@ -19,6 +19,7 @@ export default function Home() {
         headers: {
           "Content-Type": "application/json",
         },
+        cache: "no-store",
       });
       const data = await res.json();
       setSpreadsheets(data);
