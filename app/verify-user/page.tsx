@@ -51,7 +51,7 @@ export default function VerifyPage() {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/auth/verify', {
+      const response = await fetch('/api/auth/verify-user', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -65,7 +65,7 @@ export default function VerifyPage() {
         throw new Error(data.error || 'Something went wrong');
       }
 
-      router.push('/');
+      router.push('/login');
     } catch (err: any) {
       setError(err.message);
     } finally {

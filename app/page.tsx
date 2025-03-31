@@ -14,6 +14,26 @@ export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const handleLogout = async () => {
+    try {
+      const res = await fetch("/api/auth/logout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      if (res.ok) {
+        setIsAuthenticated(false);
+        router.push("/login");
+      } else {
+        throw new Error("Failed to log out");
+      }
+    }
+    catch (error) {
+      console.error("Logout error:", error);
+    }
+  };
+
   // Check authentication status and fetch all available spreadsheets
   const fetchSpreadsheets = async () => {
     setLoading(true);
@@ -132,6 +152,13 @@ export default function Home() {
                 >
                   <Plus size={18} className="mr-2" />
                   New Spreadsheet
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 rounded-lg flex items-center justify-center transition-colors shadow-md"
+                >
+                  <LogIn size={18} className="mr-2" />
+                  Logout
                 </button>
               </div>
             </div>

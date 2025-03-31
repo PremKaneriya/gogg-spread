@@ -38,7 +38,7 @@ export default function SignupPage() {
         throw new Error(data.error || 'Something went wrong');
       }
 
-      router.push(`/verify?email=${encodeURIComponent(email)}`);
+      router.push(`/verify-user?email=${encodeURIComponent(email)}`);
     } catch (err: any) {
       setError('user already exists');
     } finally {

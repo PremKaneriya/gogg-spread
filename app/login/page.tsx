@@ -34,7 +34,7 @@ export default function LoginPage() {
       }
 
       if (data.requiresVerification) {
-        router.push(`/verify?email=${encodeURIComponent(email)}`);
+        router.push(`/verify-user?email=${encodeURIComponent(email)}`);
       } else {
         router.push('/');
       }
