@@ -1,9 +1,10 @@
-
-// app/verify/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+
+// This tells Next.js to not attempt to prerender this page
+export const dynamic = 'force-dynamic';
 
 export default function VerifyPage() {
   const [otp, setOtp] = useState('');
@@ -16,6 +17,8 @@ export default function VerifyPage() {
   const email = searchParams?.get('email') || '';
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
     if (!email) {
       router.push('/login');
     }
