@@ -1,10 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-
-// This tells Next.js to not attempt to prerender this page
-export const dynamic = 'force-dynamic';
+import { useRouter } from 'next/navigation';
 
 export default function VerifyPage() {
   const [otp, setOtp] = useState('');
@@ -12,19 +9,23 @@ export default function VerifyPage() {
   const [loading, setLoading] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [canResend, setCanResend] = useState(false);
+  const [email, setEmail] = useState('');
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const email = searchParams?.get('email') || '';
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     
-    if (!email) {
-      router.push('/login');
-    }
+    // Get email from URL without using useSearchParams
+    const urlParams = new URLSearchParams(window.location.search);
+    const emailParam = urlParams.get('email') || '';
+    setEmail(emailParam);
     
-    startCountdown();
-  }, [email, router]);
+    if (!emailParam) {
+      router.push('/login');
+    } else {
+      startCountdown();
+    }
+  }, [router]);
 
   const startCountdown = () => {
     setCanResend(false);
