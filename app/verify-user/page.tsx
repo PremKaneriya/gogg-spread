@@ -1,3 +1,4 @@
+// app/verify-user/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -15,7 +16,6 @@ export default function VerifyPage() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     
-    // Get email from URL without using useSearchParams
     const urlParams = new URLSearchParams(window.location.search);
     const emailParam = urlParams.get('email') || '';
     setEmail(emailParam);
@@ -99,24 +99,24 @@ export default function VerifyPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center py-2">
-      <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-lg shadow-md">
+    <div className="min-h-screen bg-blue-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-          <h1 className="text-2xl font-bold">Verify Email</h1>
-          <p className="mt-2 text-gray-600">
-            Enter the verification code sent to <strong>{email}</strong>
+          <h1 className="text-3xl font-light text-blue-900">Verify Email</h1>
+          <p className="mt-2 text-sm text-blue-600">
+            Enter the code sent to <strong>{email}</strong>
           </p>
         </div>
-        
+
         {error && (
-          <div className="bg-red-50 p-4 rounded-md text-red-500 text-sm">
+          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 text-sm">
             {error}
           </div>
         )}
-        
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div>
-            <label htmlFor="otp" className="block text-sm font-medium text-gray-700">
+
+        <form className="space-y-6" onSubmit={handleSubmit}>
+          <div className="space-y-1">
+            <label htmlFor="otp" className="block text-sm text-blue-700">
               Verification Code
             </label>
             <input
@@ -126,33 +126,31 @@ export default function VerifyPage() {
               required
               value={otp}
               onChange={(e) => setOtp(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 text-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-3 py-2 border border-blue-200 rounded-md bg-blue-50 text-blue-900 placeholder-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
               placeholder="Enter 6-digit code"
               maxLength={6}
             />
           </div>
-          
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              {loading ? 'Verifying...' : 'Verify'}
-            </button>
-          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-2 px-4 rounded-md bg-blue-600 text-white font-medium text-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-blue-400 disabled:cursor-not-allowed transition-colors"
+          >
+            {loading ? 'Verifying...' : 'Verify'}
+          </button>
         </form>
-        
-        <div className="text-sm text-center mt-4">
-          Didn't receive the code?{' '}
+
+        <div className="text-center text-sm">
+          <span className="text-blue-600">Didn't receive the code? </span>
           <button
             onClick={handleResendOtp}
             disabled={!canResend}
             className={`font-medium ${
-              canResend 
-                ? 'text-indigo-600 hover:text-indigo-500 cursor-pointer'
-                : 'text-gray-400 cursor-not-allowed'
-            }`}
+              canResend
+                ? 'text-blue-700 hover:text-blue-900'
+                : 'text-blue-400 cursor-not-allowed'
+            } transition-colors`}
           >
             {canResend ? 'Resend code' : `Resend in ${countdown}s`}
           </button>

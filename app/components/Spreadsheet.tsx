@@ -2,7 +2,7 @@
 import React, { useRef, useState, useEffect } from "react";
 import { HotTable } from "@handsontable/react";
 import "handsontable/dist/handsontable.full.min.css";
-import { Save, Download, Upload, RefreshCw, Settings, AlertTriangle, X, HelpCircle } from "lucide-react";
+import { Save, Download, Upload, RefreshCw, Settings, AlertTriangle, X, HelpCircle, PlusCircle } from "lucide-react";
 
 interface SpreadsheetProps {
   sheetId: string | null;
@@ -27,6 +27,9 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
   const [showSettings, setShowSettings] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(true);
+  const [rowCount, setRowCount] = useState(100);
+  const [addRowsCount, setAddRowsCount] = useState(50);
+  const [showAddRowsModal, setShowAddRowsModal] = useState(false);
 
   useEffect(() => {
     if (!isNew && sheetId) {
@@ -53,13 +56,12 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
       if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
       const result = await res.json();
       if (result) {
-        const fetchedData = result.data || Array(100).fill(null).map(() => Array(26).fill(""));
-        setData(padDataToGrid(fetchedData, 100, 26));
+        const fetchedData = result.data || Array(rowCount).fill(null).map(() => Array(26).fill(""));
+        setData(padDataToGrid(fetchedData, rowCount, 26));
         setSheetName(result.name || `Spreadsheet ${id}`);
         showToastMessage("Spreadsheet loaded successfully");
       }
     } catch (error: any) {
-      console.error("Failed to fetch data:", error);
       setError(error.message || "Failed to load spreadsheet data");
       showToastMessage("Failed to load spreadsheet data", "error");
       if (!isAuthenticated) {
@@ -90,7 +92,6 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
         throw new Error("You are not authorized to save this spreadsheet. Please log in.");
       }
       if (response.ok) {
-        const result = await response.json();
         showToastMessage(`Spreadsheet ${isNew ? 'created' : 'updated'} successfully!`);
         if (onSaveComplete) onSaveComplete();
       } else {
@@ -98,7 +99,6 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
         throw new Error(errorData.error || "Save failed");
       }
     } catch (error: any) {
-      console.error("Save error:", error);
       setError(error.message || "Failed to save spreadsheet");
       showToastMessage(`Failed to save spreadsheet: ${error.message || "Unknown error"}`, "error");
       if (!isAuthenticated) {
@@ -109,7 +109,6 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
     }
   };
 
-  // Utility function to pad data to the desired grid size
   const padDataToGrid = (inputData: any[], targetRows: number, targetCols: number) => {
     const paddedData = Array(targetRows).fill(null).map(() => Array(targetCols).fill(""));
     for (let i = 0; i < Math.min(inputData.length, targetRows); i++) {
@@ -124,8 +123,7 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
     if (!hotRef.current) return;
     try {
       const tableData = hotRef.current.hotInstance.getData();
-      // Ensure the exported data is padded to 100x26
-      const fullData = padDataToGrid(tableData, 100, 26);
+      const fullData = padDataToGrid(tableData, rowCount, 26);
       const csvContent = fullData.map((row: any) => row.map((cell: any) => `"${cell}"`).join(",")).join("\n");
       const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const link = document.createElement("a");
@@ -138,7 +136,6 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
       showToastMessage("CSV exported successfully");
       setShowSettings(false);
     } catch (error) {
-      console.error("Export error:", error);
       showToastMessage("Failed to export CSV", "error");
     }
   };
@@ -166,8 +163,9 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
         const text = e.target?.result as string;
         const csvData = parseCSV(text);
         if (csvData.length > 0) {
-          // Pad the imported data to fit the 100x26 grid
-          const paddedData = padDataToGrid(csvData, 100, 26);
+          const newRowCount = Math.max(rowCount, csvData.length);
+          setRowCount(newRowCount);
+          const paddedData = padDataToGrid(csvData, newRowCount, 26);
           setData(paddedData);
           showToastMessage("CSV imported successfully");
           setShowSettings(false);
@@ -175,51 +173,75 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
           showToastMessage("Empty or invalid CSV file.", "error");
         }
       } catch (error) {
-        console.error("Error parsing CSV:", error);
         showToastMessage("Failed to parse CSV file.", "error");
       }
     };
     reader.readAsText(file, "UTF-8");
   };
 
+  const addMoreRows = () => {
+    if (!hotRef.current) return;
+    try {
+      const currentData = hotRef.current.hotInstance.getData();
+      const newRowCount = rowCount + addRowsCount;
+      const paddedData = padDataToGrid(currentData, newRowCount, 26);
+      setRowCount(newRowCount);
+      setData(paddedData);
+      hotRef.current.hotInstance.loadData(paddedData);
+      showToastMessage(`Added ${addRowsCount} rows. Total rows: ${newRowCount}`);
+      setShowAddRowsModal(false);
+    } catch (error) {
+      showToastMessage("Failed to add rows", "error");
+    }
+  };
+
+  const handleAddRowsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseInt(e.target.value, 10);
+    if (!isNaN(value) && value > 0) {
+      setAddRowsCount(value);
+    }
+  };
+
   if (!isAuthenticated) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-gray-50 p-6">
-        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 w-full max-w-md">
-          <div className="flex items-center">
-            <AlertTriangle className="h-5 w-5 mr-2" />
-            <span>You need to be logged in to access this spreadsheet.</span>
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 flex flex-col items-center justify-center p-4">
+        <div className="bg-white rounded-lg p-6 w-full max-w-md border border-gray-200 shadow-lg">
+          <div className="flex items-center text-red-600 mb-4">
+            <AlertTriangle className="h-6 w-6 mr-2" />
+            <span className="text-lg font-medium">Authentication Required</span>
           </div>
+          <p className="text-gray-700 mb-6">Please log in to access your spreadsheet.</p>
+          <button
+            onClick={() => window.location.href = "/login"}
+            className="w-full bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 transition-all"
+          >
+            Go to Login
+          </button>
         </div>
-        <button
-          onClick={() => window.location.href = "/login"}
-          className="bg-teal-600 text-white px-4 py-2 rounded-lg shadow-md hover:bg-teal-700"
-        >
-          Go to Login
-        </button>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col min-h-screen w-full bg-gray-50">
-      <div className="bg-gradient-to-r from-gray-700 to-gray-800 p-4 shadow-lg">
-        <div className="container mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
-          <div className="flex items-center w-full sm:w-auto">
+    <div className="min-h-screen w-full bg-gray-50 flex flex-col">
+      {/* Floating Header */}
+      <div className="sticky top-0 z-20 bg-white shadow-md p-4">
+        <div className="container mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="relative w-full sm:w-72">
             <input
               type="text"
               value={sheetName}
               onChange={(e) => setSheetName(e.target.value)}
               placeholder="Enter spreadsheet name"
-              className="text-xl text-gray-900 font-bold border-2 border-gray-300 rounded-lg px-3 py-2 w-full sm:w-64 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+              className="w-full px-4 py-2 bg-white text-gray-800 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
             />
           </div>
-          <div className="flex items-center justify-center gap-2 w-full sm:w-auto flex-wrap">
+          <div className="flex flex-wrap items-center gap-3 justify-center sm:justify-end w-full sm:w-auto">
             {!isNew && sheetId && (
               <button
                 onClick={() => fetchSheetData(sheetId)}
                 disabled={isLoading}
-                className="flex items-center bg-gray-600 text-white px-3 py-2 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors shadow-md"
+                className="flex items-center bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 disabled:bg-gray-100 disabled:text-gray-400 transition-all"
               >
                 <RefreshCw className="mr-2" size={16} />
                 <span>Refresh</span>
@@ -228,47 +250,56 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
             <button
               onClick={saveData}
               disabled={isLoading}
-              className="flex items-center bg-teal-600 text-white px-3 py-2 rounded-lg hover:bg-teal-700 disabled:opacity-50 transition-colors shadow-md"
+              className="flex items-center bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 disabled:bg-blue-300 transition-all"
             >
               <Save className="mr-2" size={16} />
               <span>Save</span>
             </button>
             <button
               onClick={() => setShowSettings(!showSettings)}
-              className="flex items-center bg-gray-600 text-white px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors shadow-md"
+              className="flex items-center bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-all"
             >
               <Settings className="mr-2" size={16} />
-              <span>Settings</span>
+              <span>Tools</span>
+            </button>
+            <button
+              onClick={() => setShowAddRowsModal(true)}
+              className="flex items-center bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-all"
+            >
+              <PlusCircle className="mr-2" size={16} />
+              <span>Add Rows</span>
             </button>
           </div>
         </div>
       </div>
 
+      {/* Error Banner */}
       {error && (
-        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4">
-          <div className="flex items-center">
+        <div className="bg-red-500 text-white p-4 animate-slide-down">
+          <div className="container mx-auto flex items-center">
             <AlertTriangle className="h-5 w-5 mr-2" />
             <span>{error}</span>
           </div>
         </div>
       )}
 
+      {/* Settings Modal */}
       {showSettings && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg shadow-xl p-6 w-11/12 max-w-md">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold text-gray-800">Settings</h3>
-              <button onClick={() => setShowSettings(false)} className="text-gray-500 hover:text-gray-700">
-                <X size={20} />
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-xl p-6 w-full max-w-lg border border-gray-200 shadow-xl">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-medium text-gray-800">Spreadsheet Tools</h3>
+              <button onClick={() => setShowSettings(false)} className="text-gray-500 hover:text-gray-700 transition-colors">
+                <X size={24} />
               </button>
             </div>
             <div className="space-y-4">
-              <div className="border-b pb-4">
-                <h4 className="font-medium text-gray-700 mb-2">File Operations</h4>
-                <div className="space-y-2">
+              <div className="border-b border-gray-200 pb-4">
+                <h4 className="font-medium text-gray-700 mb-3">File Operations</h4>
+                <div className="space-y-3">
                   <button
                     onClick={exportToCSV}
-                    className="flex items-center w-full bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2 rounded-lg transition-colors"
+                    className="w-full flex items-center bg-gray-100 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-200 transition-all"
                   >
                     <Download className="mr-2" size={18} />
                     Export as CSV
@@ -282,20 +313,61 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
                   />
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center w-full bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2 rounded-lg transition-colors"
+                    className="w-full flex items-center bg-gray-100 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-200 transition-all"
                   >
                     <Upload className="mr-2" size={18} />
                     Import CSV
                   </button>
                 </div>
               </div>
-              <div>
+              <button
+                onClick={() => { setShowSettings(false); setShowHelp(true); }}
+                className="w-full flex items-center bg-gray-100 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-200 transition-all"
+              >
+                <HelpCircle className="mr-2" size={18} />
+                Help & Documentation
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Rows Modal */}
+      {showAddRowsModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-xl p-6 w-full max-w-sm border border-gray-200 shadow-xl">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-medium text-gray-800">Add Rows</h3>
+              <button onClick={() => setShowAddRowsModal(false)} className="text-gray-500 hover:text-gray-700 transition-colors">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div className="mb-4">
+                <label htmlFor="rowCount" className="block text-sm font-medium text-gray-700 mb-2">
+                  Number of rows to add:
+                </label>
+                <input
+                  id="rowCount"
+                  type="number"
+                  min="1"
+                  value={addRowsCount}
+                  onChange={handleAddRowsChange}
+                  className="w-full px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex gap-3">
                 <button
-                  onClick={() => { setShowSettings(false); setShowHelp(true); }}
-                  className="flex items-center w-full bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2 rounded-lg transition-colors"
+                  onClick={() => setShowAddRowsModal(false)}
+                  className="flex-1 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-all"
                 >
-                  <HelpCircle className="mr-2" size={18} />
-                  Help & Documentation
+                  Cancel
+                </button>
+                <button
+                  onClick={addMoreRows}
+                  className="flex-1 bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-all"
+                >
+                  Add Rows
                 </button>
               </div>
             </div>
@@ -303,43 +375,45 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
         </div>
       )}
 
+      {/* Help Modal */}
       {showHelp && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg shadow-xl p-6 w-11/12 max-w-2xl max-h-screen overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold text-gray-800">Spreadsheet Help</h3>
-              <button onClick={() => setShowHelp(false)} className="text-gray-500 hover:text-gray-700">
-                <X size={20} />
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto border border-gray-200 shadow-xl">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-medium text-gray-800">Spreadsheet Guide</h3>
+              <button onClick={() => setShowHelp(false)} className="text-gray-500 hover:text-gray-700 transition-colors">
+                <X size={24} />
               </button>
             </div>
-            <div className="space-y-4 text-gray-700">
+            <div className="space-y-6 text-gray-700">
               <div>
                 <h4 className="font-medium text-gray-900 mb-2">Basic Operations</h4>
-                <ul className="list-disc pl-5 space-y-1">
-                  <li>Click on a cell to edit its content</li>
-                  <li>Use tab key to navigate between cells</li>
-                  <li>Right-click on cells for additional options</li>
-                  <li>Click on column or row headers to select entire columns/rows</li>
+                <ul className="list-disc pl-5 space-y-2">
+                  <li>Click cells to edit</li>
+                  <li>Tab to navigate</li>
+                  <li>Right-click for options</li>
+                  <li>Select headers for rows/columns</li>
                 </ul>
               </div>
               <div>
-                <h4 className="font-medium text-gray-900 mb-2">Saving Your Work</h4>
-                <p>Click the "Save" button in the top toolbar to save your spreadsheet. Make sure to give your spreadsheet a name before saving.</p>
+                <h4 className="font-medium text-gray-900 mb-2">Saving</h4>
+                <p>Hit "Save" in the toolbar. Name your sheet first!</p>
               </div>
               <div>
-                <h4 className="font-medium text-gray-900 mb-2">Importing & Exporting</h4>
-                <p>Access import and export options from the Settings menu:</p>
-                <ul className="list-disc pl-5 space-y-1">
-                  <li>Export as CSV: Save your spreadsheet to a CSV file on your computer</li>
-                  <li>Import CSV: Load data from a CSV file into your spreadsheet</li>
-                </ul>
+                <h4 className="font-medium text-gray-900 mb-2">Rows</h4>
+                <p>Add rows via the "Add Rows" button in the toolbar.</p>
+              </div>
+              <div>
+                <h4 className="font-medium text-gray-900 mb-2">Import/Export</h4>
+                <p>Use "Tools" for CSV operations.</p>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      <div className="flex-grow w-full overflow-auto">
+      {/* Spreadsheet */}
+      <div className="flex-grow w-full overflow-auto px-2 sm:px-4 lg:px-6">
         <HotTable
           ref={hotRef}
           data={data}
@@ -356,63 +430,96 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
           manualColumnResize={true}
           manualRowResize={true}
           autoRowSize={false}
-          autoColumnSize={false}
+          autoColumnSize={true}
           licenseKey="non-commercial-and-evaluation"
           className="spreadsheet-theme"
         />
       </div>
 
+      {/* Toast */}
       {showToast && (
-        <div className={`fixed bottom-4 right-4 max-w-sm p-4 rounded-lg shadow-lg transition-opacity duration-300 ${
-          toastType === "success" ? "bg-teal-600 text-white" : "bg-red-600 text-white"
-        }`}>
+        <div className={`fixed bottom-4 right-4 sm:bottom-6 sm:right-6 max-w-xs sm:max-w-sm p-4 rounded-lg shadow-lg transition-all duration-300 transform ${
+          toastType === "success" 
+            ? "bg-green-500 text-white" 
+            : "bg-red-500 text-white"
+        } animate-bounce-in`}>
           <div className="flex items-center">
             {toastType === "success" ? (
-              <svg className="w-6 h-6 mr-2" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                <path d="M5 13l4 4L19 7"></path>
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
               </svg>
             ) : (
-              <svg className="w-6 h-6 mr-2" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-              </svg>
+              <AlertTriangle className="w-5 h-5 mr-2" />
             )}
-            <p>{toastMessage}</p>
+            <p className="text-sm">{toastMessage}</p>
           </div>
         </div>
       )}
 
+      {/* Loading Overlay */}
       {isLoading && (
-        <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl flex flex-col items-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-teal-600 mb-4"></div>
-            <p className="text-gray-800 font-medium">Processing...</p>
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 flex flex-col items-center shadow-lg">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-blue-500 border-solid mb-4"></div>
+            <p className="text-gray-700 font-medium text-lg">Processing...</p>
           </div>
         </div>
       )}
 
       <style jsx global>{`
         .handsontable .htCore th {
-          background-color: #374151 !important;
-          color: white !important;
-          font-weight: bold !important;
+          background: #f1f5f9 !important;
+          color: #334155 !important;
+          font-weight: 500 !important;
+          border-bottom: 2px solid #cbd5e1 !important;
         }
         .handsontable .htCore tbody tr th {
-          background-color: #374151 !important;
-          color: white !important;
+          background: #f1f5f9 !important;
+          color: #334155 !important;
         }
         .handsontable .htCore span.colHeader {
-          color: white !important;
+          color: #334155 !important;
         }
         .handsontable .htCore tbody tr:nth-child(even) td {
-          background-color: #f9fafb !important;
+          background-color: #f8fafc !important;
         }
         .handsontable .htCore tbody td.current,
         .handsontable .htCore tbody td.area {
-          background-color: rgba(45, 212, 191, 0.2) !important;
+          background-color: rgba(59, 130, 246, 0.1) !important;
+          border: 1px dashed #3B82F6 !important;
         }
         .handsontable .htCore td {
-          border-color: #e5e7eb !important;
+          border-color: #e2e8f0 !important;
+          transition: background-color 0.2s ease;
         }
+        @media (max-width: 640px) {
+          .handsontable .htCore th {
+            font-size: 12px !important;
+            padding: 4px !important;
+          }
+          .handsontable .htCore td {
+            font-size: 12px !important;
+            padding: 4px !important;
+          }
+        }
+
+        /* Custom Animations */
+        @keyframes slide-down {
+          from { transform: translateY(-100%); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes bounce-in {
+          0% { transform: scale(0.3); opacity: 0; }
+          50% { transform: scale(1.05); opacity: 1; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-slide-down { animation: slide-down 0.3s ease-out; }
+        .animate-fade-in { animation: fade-in 0.3s ease-in; }
+        .animate-bounce-in { animation: bounce-in 0.5s ease-out; }
       `}</style>
     </div>
   );
