@@ -15,9 +15,8 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [sheetName, setSheetName] = useState<string>("Untitled Spreadsheet");
   const [data, setData] = useState<any[]>(() => {
-    const rows = 100;
-    const cols = 26;
-    return Array(rows).fill(null).map(() => Array(cols).fill(""));
+    // Initialize with empty rows rather than filled array
+    return Array(100).fill(null).map(() => Array(26).fill(null));
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,6 +63,8 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
       hotRef.current.hotInstance.updateSettings({
         width: '100%',
         height: `calc(${viewportHeight}px - 120px)`,
+        // Ensure all rows are rendered
+        renderAllRows: true
       });
     }
   }, [viewportWidth, viewportHeight]);
@@ -94,7 +95,7 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
       if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
       const result = await res.json();
       if (result) {
-        const fetchedData = result.data || Array(rowCount).fill(null).map(() => Array(26).fill(""));
+        const fetchedData = result.data || Array(rowCount).fill(null).map(() => Array(26).fill(null));
         setData(padDataToGrid(fetchedData, rowCount, 26));
         setSheetName(result.name || `Spreadsheet ${id}`);
         showToastMessage("Spreadsheet loaded successfully");
@@ -153,10 +154,16 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
   };
 
   const padDataToGrid = (inputData: any[], targetRows: number, targetCols: number) => {
-    const paddedData = Array(targetRows).fill(null).map(() => Array(targetCols).fill(""));
+    // Create an array of empty rows (null values, not empty strings)
+    const paddedData = Array(targetRows).fill(null).map(() => Array(targetCols).fill(null));
+    
+    // Fill in only the data that exists
     for (let i = 0; i < Math.min(inputData.length, targetRows); i++) {
       for (let j = 0; j < Math.min(inputData[i].length, targetCols); j++) {
-        paddedData[i][j] = inputData[i][j] || "";
+        // Only copy non-empty values
+        if (inputData[i][j] !== "" && inputData[i][j] !== null && inputData[i][j] !== undefined) {
+          paddedData[i][j] = inputData[i][j];
+        }
       }
     }
     return paddedData;
@@ -166,8 +173,13 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
     if (!hotRef.current || !hotRef.current.hotInstance) return;
     try {
       const tableData = hotRef.current.hotInstance.getData();
-      const fullData = padDataToGrid(tableData, rowCount, 26);
-      const csvContent = fullData.map((row: any) => row.map((cell: any) => `"${cell}"`).join(",")).join("\n");
+      // Don't add empty cells to CSV
+      const csvContent = tableData.map((row: any) => 
+        row.map((cell: any) => 
+          cell !== null && cell !== undefined && cell !== "" ? `"${cell}"` : ""
+        ).join(",")
+      ).join("\n");
+      
       const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const link = document.createElement("a");
       const url = URL.createObjectURL(blob);
@@ -233,10 +245,26 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
     try {
       const currentData = hotRef.current.hotInstance.getData();
       const newRowCount = rowCount + addRowsCount;
-      const paddedData = padDataToGrid(currentData, newRowCount, 26);
+      
+      // Create new rows with null values, not empty strings
+      const newRows = Array(addRowsCount).fill(null).map(() => Array(26).fill(null));
+      
+      // Combine existing data with new rows
+      const newData = [...currentData, ...newRows];
+      
       setRowCount(newRowCount);
-      setData(paddedData);
-      hotRef.current.hotInstance.loadData(paddedData);
+      setData(newData);
+      
+      // Update the HotTable with new data
+      hotRef.current.hotInstance.loadData(newData);
+      
+      // Force re-render all rows to ensure visibility
+      setTimeout(() => {
+        if (hotRef.current && hotRef.current.hotInstance) {
+          hotRef.current.hotInstance.render();
+        }
+      }, 100);
+      
       showToastMessage(`Added ${addRowsCount} rows. Total rows: ${newRowCount}`);
       setShowAddRowsModal(false);
     } catch (error) {
@@ -282,6 +310,10 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
       outsideClickDeselects: false,
       wordWrap: isMobile,
       preventOverflow: "horizontal" as const,
+      renderAllRows: true, // Ensure all rows are rendered
+      viewportRowRenderingOffset: rowCount, // Render all rows within the viewport
+      // Ensure rows are properly sized
+      rowHeights: 24,
     };
 
     // Add mobile-specific settings if needed
