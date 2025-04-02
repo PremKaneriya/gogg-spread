@@ -54,20 +54,20 @@ const Spreadsheet: React.FC<SpreadsheetProps> = ({ sheetId, isNew, onSaveComplet
   }, []);
 
   // Adjust Handsontable settings when viewport changes
-  useEffect(() => {
-    // Do nothing if not in browser or if hotRef is not set
-    if (typeof window === 'undefined' || !hotRef.current || !hotRef.current.hotInstance) return;
-    
-    // Ensure we have non-zero dimensions
-    if (viewportWidth > 0 && viewportHeight > 0) {
-      hotRef.current.hotInstance.updateSettings({
-        width: '100%',
-        height: `calc(${viewportHeight}px - 120px)`,
-        // Ensure all rows are rendered
-        renderAllRows: true
-      });
-    }
-  }, [viewportWidth, viewportHeight]);
+ // Adjust Handsontable settings when viewport changes
+useEffect(() => {
+  // Do nothing if not in browser or if hotRef is not set
+  if (typeof window === 'undefined' || !hotRef.current || !hotRef.current.hotInstance) return;
+  
+  // Ensure we have non-zero dimensions
+  if (viewportWidth > 0 && viewportHeight > 0) {
+    hotRef.current.hotInstance.updateSettings({
+      width: '100%',
+      height: `calc(${viewportHeight}px - 120px)`,
+      // Do not include renderAllRows here
+    });
+  }
+}, [viewportWidth, viewportHeight]);
 
   // Fetch data if we have an existing sheet
   useEffect(() => {
